@@ -28,6 +28,12 @@
     --accent: #2a78d6; --warn: #e34948; --good: #1baf7a; --gold: #eda100; --violet: #4a3aa7;
     --forest: #006400; --navy: #104281; --skyblue: #86b6ef; --tan: #9a8f7a; --vermillion: #c1440e;
     --slate: #55707c;
+    /* In-band tier labels on scene 8's stacked area chart (progress.md 2ba): recomputed WCAG
+       contrast for all 5 tier fills in both themes. Primary/Resource-based/Low-tech are dark
+       enough for near-black ink in both themes (--tech-ink-dark, never redefined below).
+       Medium-tech/High-tech are only dark enough for white ink in light theme; their dark-theme
+       hexes are lighter and need near-black ink too, hence --tech-ink-flip, redefined per theme. */
+    --tech-ink-dark: #0b0b0b; --tech-ink-flip: #fff;
     --region-eu: #697ae1; --region-asia: #822878; --region-americas: #f19241; --region-cis: #c04023;
     --region-mena: #4bc3d1; --region-africa: #56B4E9; --region-oceania: #B8A400;
     /* Vertical/grid reference lines (scenes 4, 9, 10, 12, 15, 17, 18) read var(--text-muted) at
@@ -58,6 +64,7 @@
       --region-eu: #2363a8; --region-asia: #a176df; --region-americas: #dc6c35; --region-cis: #a52f56;
       --region-mena: #3da590; --region-africa: #56B4E9; --region-oceania: #F0E442;
       --ref-line-opacity: 0.6;
+      --tech-ink-flip: #0b0b0b;
     }
   }
   :root[data-theme="dark"] .viz-root {
@@ -71,6 +78,7 @@
     --region-eu: #2363a8; --region-asia: #a176df; --region-americas: #dc6c35; --region-cis: #a52f56;
     --region-mena: #3da590; --region-africa: #56B4E9; --region-oceania: #F0E442;
     --ref-line-opacity: 0.6;
+    --tech-ink-flip: #0b0b0b;
   }
 
   * { box-sizing: border-box; }
@@ -148,6 +156,14 @@
     color: var(--accent); text-decoration: none;
   }
   .outro .back-top:hover { text-decoration: underline; }
+  /* Primary CTA to the standalone map dashboard (Global Fragility Map), a bigger action than the
+     plain-text "Back to the top" utility link above, so it gets a filled pill instead. */
+  .outro .explore-cta {
+    display: inline-block; margin-top: 4px; margin-bottom: 14px; padding: 10px 22px;
+    background: var(--accent); color: #fff; font-size: 14px; font-weight: 650;
+    text-decoration: none; border-radius: 999px;
+  }
+  .outro .explore-cta:hover { opacity: .88; }
   .scroll-cue { margin-top: 34px; font-size: 12px; color: var(--text-muted); }
 
   /* Registered so the browser can smoothly animate a color through this custom property (plain
@@ -255,7 +271,17 @@
   .act-break[data-act-index="1"] { grid-row: 4; }
   .act-break[data-act-index="2"] { grid-row: 9; }
   .act-break[data-act-index="3"] { grid-row: 16; }
-  .act-break-inner { max-width: 760px; padding: 80px 24px; }
+  .act-break-inner {
+    max-width: 760px; padding: 80px 24px;
+    /* Hidden until .act-break gets its .active toggle (see showInterlude/exitInterlude), so the
+       heading rises/fades into place instead of just sitting there in normal scroll flow while
+       the chart disappears with no complementary motion. Chart sinks + fades out (see
+       .interlude-active .chart-holder below); this rises + fades in, so the two read as one
+       handoff instead of an empty gap. */
+    opacity: 0; transform: translateY(18px);
+    transition: opacity .5s cubic-bezier(.4,0,.2,1) .06s, transform .5s cubic-bezier(.4,0,.2,1) .06s;
+  }
+  .act-break.active .act-break-inner { opacity: 1; transform: translateY(0); }
   .act-break-kicker {
     margin-bottom: 16px; font-size: 11px; font-weight: 750; letter-spacing: .11em;
     text-transform: uppercase; color: var(--act-accent, var(--accent));
@@ -274,6 +300,76 @@
     .act-break { grid-column: 1; min-height: 72vh; }
     .act-break-inner { padding: 56px 20px; }
     .act-break h2 { font-size: clamp(32px, 10vw, 46px); }
+  }
+
+  /* Scroll-weighted scene handoff. Adjacent cards remain as faint spatial context while the
+     stronger card owns interaction and its chart. Act interludes retain their authored full-screen
+     pause; the chart and every card disappear while an interlude crosses the viewport midpoint. */
+  body.neighbor-flow { overflow-x: hidden; }
+  body.neighbor-flow .scrolly {
+    row-gap: 0; padding-top: 22vh; padding-bottom: 22vh;
+  }
+  body.neighbor-flow .sticky-pane {
+    /* Extend the sticky figure through both 22vh boundary runways so Scenes 1 and 18 can meet the
+       figure at the viewport midpoint instead of the figure entering late or leaving early. */
+    margin-top: -22vh; margin-bottom: -22vh;
+  }
+  body.neighbor-flow .step { min-height: 56vh; margin-top: 0; margin-bottom: 0; }
+  body.neighbor-flow .step.neighbor-card .card {
+    will-change: opacity, transform, filter;
+    visibility: visible !important; pointer-events: none !important;
+    transform-origin: center; transition: box-shadow .16s linear;
+  }
+  body.neighbor-flow .step.neighbor-card:not([inert]) .card {
+    pointer-events: auto !important;
+  }
+  body.neighbor-flow .chart-holder {
+    z-index: 3; transition: none; will-change: opacity, transform;
+  }
+  /* Scroll-scrubbed opacity/transform (see updateNeighborFlow) writes a new inline value on every
+     scroll tick; transitioning that would make the chart visibly lag behind the wheel/finger, so
+     it stays `transition: none` above. Entering/leaving an interlude is a one-off discrete swap
+     instead of a continuous scrub, so it gets its own short-lived transition via this class
+     (added by primeChartActFade(), called from showInterlude()/exitInterlude(), removed again
+     once the transition finishes so normal scroll-scrubbing goes back to instant). */
+  body.neighbor-flow .chart-holder.act-fade {
+    transition: opacity .4s cubic-bezier(.4,0,.2,1), transform .4s cubic-bezier(.4,0,.2,1);
+  }
+  body.neighbor-flow .viz-root.interlude-active .chart-holder.act-fade {
+    transition: none;
+  }
+  /* Act headings follow the reader's scroll position instead of switching on at the midpoint and
+     then running a detached timer. updateNeighborFlow() supplies their opacity/offset every frame;
+     transitions here would lag behind the wheel or finger and recreate the apparent pop. */
+  body.neighbor-flow .act-break-inner { transition: none; }
+  body.neighbor-flow .chart-flow-ghost {
+    position: absolute; z-index: 2; left: 0; top: 50%; width: 100%;
+    transform: translateY(-50%); pointer-events: none !important;
+    filter: saturate(var(--ghost-saturation, 1)) blur(var(--ghost-blur, 0px));
+    transition: none !important; will-change: opacity, transform, filter;
+  }
+  body.neighbor-flow .chart-flow-ghost * {
+    pointer-events: none !important; transition: none !important;
+  }
+  body.neighbor-flow .chart-flow-ghost h2,
+  body.neighbor-flow .chart-flow-ghost .c-sub,
+  body.neighbor-flow .chart-flow-ghost .stage-controls,
+  body.neighbor-flow .chart-flow-ghost .stage-detail,
+  body.neighbor-flow .chart-flow-ghost svg text,
+  body.neighbor-flow .chart-flow-ghost svg line {
+    opacity: var(--ghost-detail-opacity, 1) !important;
+  }
+  body.neighbor-flow .viz-root.interlude-active .chart-holder {
+    opacity: var(--act-chart-opacity, 0) !important;
+    transform: translateY(var(--act-chart-shift, 8px)) !important;
+  }
+  body.neighbor-flow .viz-root.interlude-active .step.neighbor-card .card {
+    opacity: 0 !important; visibility: hidden !important; pointer-events: none !important;
+  }
+  @media (max-width: 900px) {
+    body.neighbor-flow .scrolly { padding-top: 0; padding-bottom: 8vh; }
+    body.neighbor-flow .sticky-pane { margin-top: 0; margin-bottom: 0; }
+    body.neighbor-flow .step { min-height: auto; margin: 6vh 0; }
   }
   .step .card {
     /* Translucent + blurred, not the old fully opaque var(--surface-1): reads as a distinct
@@ -459,6 +555,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .chart-holder, .chart-holder * { transition: none !important; }
+    .act-break-inner { transition: none !important; }
     .viz-root::before { animation: none !important; transform: none !important; }
   }
   @media (max-width: 900px) {
@@ -466,7 +563,7 @@
   }
 </style>
 </head>
-<body>
+<body class="neighbor-flow">
 <div class="viz-root">
 
 <div class="top-controls">
@@ -1000,6 +1097,12 @@
     without that slack: unremarkable for decades, then to the world's highest in two years once
     sanctions cut off the alternatives it used to have, a reminder that concentration is a choice
     until the day it no longer is.</p>
+  <div>
+    <!-- Local path today; the map dashboard is not yet deployed. Once it is (planned as a sibling
+         GitHub Pages path alongside this story, e.g. fragility-map/ next to storyline/), update
+         this href to that published URL instead of the local relative path. -->
+    <a class="explore-cta" href="../finalmap/" target="_blank" rel="noopener">Explore the full dataset yourself &#8594;</a>
+  </div>
   <a class="back-top" href="#" id="backToTop">Back to the top &#8593;</a>
 </div>
 <footer class="note">
@@ -2430,16 +2533,22 @@ var S_TECH_COLOR = {
   "Primary": "var(--tan)", "Resource-based": "var(--gold)", "Low tech": "var(--good)",
   "Medium tech": "var(--vermillion)", "High tech": "var(--navy)"
 };
+// Ink for the in-band tier labels drawn on top of each fill above (drawSceneTechChart). Three
+// tiers are dark enough for near-black ink in both themes; Medium/High tech's dark-theme fills
+// are lighter than their light-theme fills and need near-black too, so --tech-ink-flip carries
+// the per-theme difference instead of a hardcoded literal (see the --tech-ink-* comment near the
+// top of the file).
+var S_TECH_INK = {
+  "Primary": "var(--tech-ink-dark)", "Resource-based": "var(--tech-ink-dark)",
+  "Low tech": "var(--tech-ink-dark)",
+  "Medium tech": "var(--tech-ink-flip)", "High tech": "var(--tech-ink-flip)"
+};
 
 function sceneTech() {
   clearStage();
   chartTitle.textContent = "The technology ladder: Türkiye climbed it selling, not buying";
   chartSub.textContent = "share of the risk index by Lall (2000) technology tier, 1995–2024";
   drawSceneTechChart();
-  var legend = S_TECH_TIERS.slice().reverse().map(function (t) {
-    return '<span class="item"><span class="swatch" style="background:' + S_TECH_COLOR[t] + ';"></span>' + t + '</span>';
-  }).join("");
-  stageDetail.innerHTML = '<div class="region-legend"><span class="lbl">Tier</span>' + legend + '</div>';
 }
 
 function drawSceneTechChart() {
@@ -2495,9 +2604,21 @@ function drawSceneTechChart() {
       dPath += "Z";
       stage.appendChild(el("path", { d: dPath, fill: S_TECH_COLOR[tier], stroke: "var(--surface-1)", "stroke-width": 0.5 }));
       var lastV = vals[vals.length - 1];
-      if (lastV > 5.5) {
+      var labelX = xF(years[years.length - 1]) - 4;
+      var ink = S_TECH_INK[tier];
+      if (lastV > 7.5) {
+        // Band is tall enough for both the tier name and its value, in place of the below-chart
+        // legend this replaced (progress.md 2ba).
         var midY = yF(bottom[bottom.length - 1] + lastV / 2);
-        var lbl = el("text", { x: xF(years[years.length - 1]) - 4, y: midY + 3, "text-anchor": "end", "font-size": "9", "font-weight": "700", fill: "#fff" });
+        var nameLbl = el("text", { x: labelX, y: midY - 3, "text-anchor": "end", "font-size": "8.5", "font-weight": "700", fill: ink });
+        nameLbl.textContent = tier;
+        stage.appendChild(nameLbl);
+        var valLbl = el("text", { x: labelX, y: midY + 9, "text-anchor": "end", "font-size": "9", "font-weight": "700", fill: ink });
+        valLbl.textContent = lastV.toFixed(0) + "%";
+        stage.appendChild(valLbl);
+      } else if (lastV > 5.5) {
+        var midY2 = yF(bottom[bottom.length - 1] + lastV / 2);
+        var lbl = el("text", { x: labelX, y: midY2 + 3, "text-anchor": "end", "font-size": "9", "font-weight": "700", fill: ink });
         lbl.textContent = lastV.toFixed(0) + "%";
         stage.appendChild(lbl);
       }
@@ -4002,26 +4123,29 @@ var navPrev = document.getElementById("navPrev");
 var navNext = document.getElementById("navNext");
 var navLast = document.getElementById("navLast");
 var vizRoot = document.querySelector(".viz-root");
+var neighborFlow = document.body.classList.contains("neighbor-flow");
 // A real click-and-drag on a year slider can, on some trackpads, register a sliver of incidental
 // vertical scroll alongside the intended horizontal drag. If that jitter crosses the
 // IntersectionObserver's narrow -45%/-45% band into a neighboring scene even briefly, showScene()
-// used to schedule that scene's own setup 650ms later regardless -- and if it fired while the user
-// was still mid-drag, clearStage() tore out the very <input> they were dragging, permanently
-// dropping the browser's pointer capture on it (reported: the slider "gets stuck" at whatever
-// value it had reached, sometimes even after a page reload if the user re-triggers the same
-// jitter). An earlier version of this guard tracked pointerdown/pointerup pairs directly, but that
-// missed real cases (a slow, deliberate mouse drag still got stuck), and one attempt at extra
-// "safety net" listeners (mouseup/change) caused an unrelated hard hang, so both were dropped.
-// This version checks browser focus instead of trying to track individual pointer events: a native
-// range input reliably keeps document.activeElement pointed at itself for the whole mousedown-
-// drag-mouseup gesture regardless of which specific events fire along the way, which is a
-// guarantee the browser itself enforces rather than bookkeeping this code has to get right.
-// Delegated at the document level rather than added per scene, since every slider scene builds its
-// own <input> independently.
+// must defer the switch: clearStage() would otherwise tear out the <input> that still owns the
+// gesture. The guard must describe the gesture, not mere focus. Native range inputs normally stay
+// document.activeElement after pointerup; the old focus-only guard therefore mistook every later
+// wheel/trackpad scroll for an unfinished drag and could leave Scene 1's chart underneath a much
+// later act interlude. Track pointer activity explicitly, with :active as a browser-state fallback,
+// then reconcile the observer's last deferred destination just after pointer release. Delegation
+// covers every slider scene without adding listeners to each dynamically-created input.
 var pendingSceneAfterDrag = null;
+var activeSliderPointer = null;
+document.addEventListener("pointerdown", function (e) {
+  if (e.target.matches && e.target.matches('.year-slider input[type="range"]')) {
+    activeSliderPointer = e.target;
+  }
+}, true);
 function activeYearSlider() {
+  if (activeSliderPointer && activeSliderPointer.isConnected) return activeSliderPointer;
   var el = document.activeElement;
-  return el && el.matches && el.matches('.year-slider input[type="range"]') ? el : null;
+  return el && el.matches &&
+    el.matches('.year-slider input[type="range"]') && el.matches(':active') ? el : null;
 }
 function releasePendingSceneSwitch() {
   if (pendingSceneAfterDrag === null) return;
@@ -4029,11 +4153,24 @@ function releasePendingSceneSwitch() {
   pendingSceneAfterDrag = null;
   showScene(next);
 }
+function finishSliderPointerGesture() {
+  if (!activeSliderPointer && pendingSceneAfterDrag === null) return;
+  activeSliderPointer = null;
+  // Let the browser clear :active before showScene() checks activeYearSlider() again. Reconcile the
+  // interlude too: its observer may have fired only once while the gesture guard was active.
+  setTimeout(function () {
+    releasePendingSceneSwitch();
+    syncInterludeFromViewport();
+  }, 0);
+}
+window.addEventListener("pointerup", finishSliderPointerGesture, true);
+window.addEventListener("pointercancel", finishSliderPointerGesture, true);
+document.addEventListener("lostpointercapture", finishSliderPointerGesture, true);
 // focusout (unlike blur) bubbles, so this one delegated listener catches every scene's own
-// slider losing focus, whether that's a real drag ending (click elsewhere) or a keyboard user
-// tabbing off it.
+// slider losing focus, including a keyboard user tabbing off it.
 document.addEventListener("focusout", function (e) {
   if (e.target.matches && e.target.matches('.year-slider input[type="range"]')) {
+    if (activeSliderPointer === e.target) activeSliderPointer = null;
     releasePendingSceneSwitch();
     // If incidental vertical motion carried the viewport into an act break while the slider
     // owned focus, showInterlude() deliberately ignored it. IntersectionObserver may not emit a
@@ -4043,14 +4180,31 @@ document.addEventListener("focusout", function (e) {
     setTimeout(syncInterludeFromViewport, 0);
   }
 });
-// Window blur doesn't change document.activeElement (the slider still reports itself as focused
-// even after the whole tab loses focus, e.g. alt-tabbing away mid-drag), so without this a
-// deferred switch could wait forever for a focusout that never comes until the user tabs back.
-window.addEventListener("blur", releasePendingSceneSwitch);
+// A pointer released outside the tab may produce window blur without a matching pointerup here.
+window.addEventListener("blur", finishSliderPointerGesture);
+var actFadeTimer = null;
+var interludeRenderedScene = null;
+// See the `.chart-holder.act-fade` CSS comment: interludes are a discrete on/off swap, not the
+// continuous per-frame scroll-scrubbed opacity normal scenes use, so they get a brief transition
+// of their own instead of the `transition: none` scroll-scrubbing needs to stay responsive. The
+// class is removed again once the transition completes so a normal scene resuming right after
+// doesn't inherit a laggy transition on its own scroll-scrubbed updates.
+function primeChartActFade() {
+  chartCard.classList.add("act-fade");
+  if (actFadeTimer) clearTimeout(actFadeTimer);
+  actFadeTimer = setTimeout(function () {
+    chartCard.classList.remove("act-fade");
+    actFadeTimer = null;
+  }, 600);
+}
 function exitInterlude() {
   if (activeInterlude === null) return false;
   activeInterlude = null;
+  interludeRenderedScene = null;
   vizRoot.classList.remove("interlude-active");
+  vizRoot.style.removeProperty("--act-chart-opacity");
+  vizRoot.style.removeProperty("--act-chart-shift");
+  primeChartActFade();
   if (typeof interludes !== "undefined") interludes.forEach(function (b) { b.classList.remove("active"); });
   return true;
 }
@@ -4058,11 +4212,13 @@ function showInterlude(actIndex) {
   if (activeYearSlider()) return;
   var act = ACTS[actIndex];
   if (!act) return;
+  if (activeInterlude !== actIndex) interludeRenderedScene = null;
   activeInterlude = actIndex;
   hideTooltip();
   if (sceneSwitchTimer) { clearTimeout(sceneSwitchTimer); sceneSwitchTimer = null; }
   chartCard.classList.remove("is-switching");
   vizRoot.classList.add("interlude-active");
+  primeChartActFade();
   steps.forEach(function (s) { s.inert = true; });
   tocLinks.forEach(function (a) { a.classList.remove("active"); });
   railDots.forEach(function (d) { d.classList.remove("active"); });
@@ -4101,6 +4257,12 @@ function showScene(i) {
   vizRoot.style.setProperty("--scene-accent", sceneAccentColor(i));
   vizRoot.style.setProperty("--act-accent", actLabelColor(i));
   if (sceneSwitchTimer) { clearTimeout(sceneSwitchTimer); sceneSwitchTimer = null; }
+  if (neighborFlow) {
+    steps.forEach(function (s, idx) { s.inert = (idx !== i); });
+    SCENES[i]();
+    chartCard.classList.remove("is-switching");
+    return;
+  }
   if (isFirst || reduceMotion) {
     steps.forEach(function (s, idx) { s.inert = (idx !== i); });
     SCENES[i]();
@@ -4133,13 +4295,17 @@ var observer = new IntersectionObserver(function (entries) {
     if (entry.isIntersecting) showScene(+entry.target.getAttribute("data-step"));
   });
 }, { rootMargin: "-45% 0px -45% 0px" });
-steps.forEach(function (s) { observer.observe(s); });
+if (!neighborFlow) steps.forEach(function (s) { observer.observe(s); });
 var interludeObserver = new IntersectionObserver(function (entries) {
   entries.forEach(function (entry) {
     if (entry.isIntersecting) showInterlude(+entry.target.dataset.actIndex);
   });
 }, { rootMargin: "-43% 0px -43% 0px" });
-interludes.forEach(function (b) { interludeObserver.observe(b); });
+// Desktop neighbor-flow already owns interlude activation from the viewport midpoint inside its
+// single requestAnimationFrame scroll loop. Observing the same breaks here as well activates them
+// roughly 6% early and races that loop, producing a frame where scene, card and act title are all
+// hidden. The observer remains the controller for the non-neighbor/mobile layout only.
+if (!neighborFlow) interludes.forEach(function (b) { interludeObserver.observe(b); });
 
 // Contents nav: builds its entries from each scene's own <h3> rather than a hardcoded list, so
 // it can't drift out of sync with a scene's title. Jumping is just a scroll, the existing
@@ -4267,7 +4433,225 @@ themeToggle.addEventListener("click", function () {
   }
 });
 
-showScene(0);
+if (neighborFlow) {
+  var flowSceneIndices = Array.from({ length: steps.length }, function (_, i) { return i; });
+  var flowSteps = flowSceneIndices.map(function (i) { return steps[i]; });
+  flowSteps.forEach(function (step) { step.classList.add("neighbor-card"); });
+  var flowFrame = null;
+  var flowChartGhost = null;
+  var flowGhostStartOpacity = 0;
+  var flowGhostDirection = 0;
+  var flowGhostScene = null;
+  var flowIncomingStartOpacity = 0.03;
+  var flowGhostStartScroll = 0;
+  var flowGhostStartTime = 0;
+  var flowGhostSpacing = 1;
+
+  function flowSmoothstep(edge0, edge1, value) {
+    var t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  }
+  function removeFlowChartGhost() {
+    if (flowChartGhost) flowChartGhost.remove();
+    flowChartGhost = null;
+    flowGhostStartOpacity = 0;
+    flowGhostDirection = 0;
+    flowGhostScene = null;
+    flowIncomingStartOpacity = 0.03;
+    flowGhostStartScroll = 0;
+    flowGhostStartTime = 0;
+    flowGhostSpacing = 1;
+  }
+  function captureFlowChartGhost(direction, incomingScene, spacing) {
+    // Reversing during a crossfade promotes the returning ghost at its present opacity, preventing
+    // a flash back to the normal 3% incoming floor.
+    var returningOpacity = flowChartGhost && flowGhostScene === incomingScene
+      ? parseFloat(getComputedStyle(flowChartGhost).opacity) || 0.03
+      : 0.03;
+    var outgoingScene = currentScene;
+    removeFlowChartGhost();
+    var ghost = chartCard.cloneNode(true);
+    ghost.removeAttribute("id");
+    ghost.querySelectorAll("[id]").forEach(function (node) { node.removeAttribute("id"); });
+    ghost.classList.remove("is-switching");
+    ghost.classList.add("chart-flow-ghost");
+    ghost.setAttribute("aria-hidden", "true");
+    ghost.setAttribute("inert", "");
+    flowGhostStartOpacity = Math.min(0.50, parseFloat(getComputedStyle(chartCard).opacity) || 0.3);
+    ghost.style.opacity = String(flowGhostStartOpacity);
+    ghost.style.transform = "translateY(-50%)";
+    ghost.style.setProperty("--ghost-detail-opacity", "1");
+    ghost.style.setProperty("--ghost-saturation", "1");
+    ghost.style.setProperty("--ghost-blur", "0.12px");
+    document.querySelector(".sticky-pane").appendChild(ghost);
+    flowChartGhost = ghost;
+    flowGhostDirection = direction;
+    flowGhostScene = outgoingScene;
+    flowIncomingStartOpacity = Math.max(0.03, returningOpacity);
+    flowGhostStartScroll = window.scrollY;
+    flowGhostStartTime = performance.now();
+    flowGhostSpacing = Math.max(1, spacing);
+  }
+  function updateNeighborFlow() {
+    flowFrame = null;
+    var midpoint = window.innerHeight / 2;
+
+    // Inline scroll styles must never survive ownership of an act break. A large wheel step can
+    // leave the break between animation frames; reset every heading first, then explicitly style
+    // only the one whose physical section currently contains the viewport midpoint.
+    interludes.forEach(function (interlude) {
+      var inner = interlude.querySelector(".act-break-inner");
+      inner.style.opacity = "0";
+      inner.style.transform = "translateY(18px)";
+    });
+
+    // Interludes keep their full editorial pause. Do not let the nearest-scene calculation exit an
+    // interlude early or clone a chart across an act boundary.
+    for (var b = 0; b < interludes.length; b++) {
+      var breakRect = interludes[b].getBoundingClientRect();
+      if (breakRect.top <= midpoint && breakRect.bottom >= midpoint) {
+        removeFlowChartGhost();
+        showInterlude(+interludes[b].dataset.actIndex);
+        // Keep the handoff visually continuous without restoring the old wrong-scene overlap.
+        // The chart for the side the reader is approaching is prepared while fully hidden; it can
+        // then crossfade with the title at that side's boundary in either scroll direction.
+        var actProgress = Math.max(0, Math.min(1,
+          (midpoint - breakRect.top) / Math.max(1, breakRect.height)));
+        var actTitleIn = flowSmoothstep(0.08, 0.20, actProgress);
+        var actTitleOut = flowSmoothstep(0.80, 0.94, actProgress);
+        var actTitleOpacity = actTitleIn * (1 - actTitleOut);
+        var actTitleOffset = reduceMotion ? 0 : (1 - actTitleIn) * 18 - actTitleOut * 18;
+        var actInner = interludes[b].querySelector(".act-break-inner");
+        actInner.style.opacity = actTitleOpacity.toFixed(3);
+        actInner.style.transform = "translateY(" + actTitleOffset.toFixed(2) + "px)";
+
+        var activeAct = ACTS[+interludes[b].dataset.actIndex];
+        var preparedScene = actProgress < 0.5 ? activeAct.start - 1 : activeAct.start;
+        if (preparedScene >= 0 && preparedScene < SCENES.length &&
+            interludeRenderedScene !== preparedScene) {
+          SCENES[preparedScene]();
+          chartCard.classList.remove("is-switching");
+          interludeRenderedScene = preparedScene;
+        }
+
+        // Old scene yields on the near edge; the already-prepared correct next scene enters on the
+        // far edge. Math.max makes the same pair of curves work symmetrically in reverse.
+        var outgoingActChart = 1 - flowSmoothstep(0.02, 0.20, actProgress);
+        var incomingActChart = flowSmoothstep(0.80, 0.98, actProgress);
+        var actChartOpacity = Math.max(outgoingActChart, incomingActChart);
+        vizRoot.style.setProperty("--act-chart-opacity", actChartOpacity.toFixed(3));
+        vizRoot.style.setProperty("--act-chart-shift",
+          (reduceMotion ? 0 : (1 - actChartOpacity) * 8).toFixed(2) + "px");
+        return;
+      }
+    }
+
+    // The midpoint has cleared every act break. Release the interlude immediately instead of
+    // waiting for the nearest-scene ownership threshold; otherwise the title can be fully faded
+    // out while the page remains stuck in a blank interlude state for the rest of that gap.
+    if (activeInterlude !== null) {
+      exitInterlude();
+      steps.forEach(function (step, idx) { step.inert = (idx !== currentScene); });
+    }
+
+    var centers = flowSteps.map(function (step) {
+      var rect = step.getBoundingClientRect();
+      return rect.top + rect.height / 2;
+    });
+    var segmentLeft = 0;
+    if (midpoint >= centers[centers.length - 1]) {
+      segmentLeft = centers.length - 2;
+    } else {
+      for (var p = 0; p < centers.length - 1; p++) {
+        if (midpoint >= centers[p] && midpoint <= centers[p + 1]) { segmentLeft = p; break; }
+      }
+    }
+    var segmentRight = segmentLeft + 1;
+    var spacing = Math.max(1, centers[segmentRight] - centers[segmentLeft]);
+    var progress = Math.max(0, Math.min(1, (midpoint - centers[segmentLeft]) / spacing));
+    var currentPos = flowSceneIndices.indexOf(currentScene);
+    var switchPoint = currentPos === segmentRight ? 0.39 : 0.42;
+    var activePos;
+    if (currentPos === segmentLeft) activePos = progress >= 0.42 ? segmentRight : segmentLeft;
+    else if (currentPos === segmentRight) activePos = progress <= 0.39 ? segmentLeft : segmentRight;
+    else activePos = progress < 0.42 ? segmentLeft : segmentRight;
+    var activeScene = flowSceneIndices[activePos];
+
+    var baseOpacity = 0.055;
+    var cardOpacities = flowSteps.map(function () { return baseOpacity; });
+    cardOpacities[segmentLeft] = baseOpacity + (1 - baseOpacity) *
+      (1 - flowSmoothstep(0.10, 0.50, progress));
+    cardOpacities[segmentRight] = baseOpacity + (1 - baseOpacity) *
+      flowSmoothstep(0.26, 0.74, progress);
+
+    var rawChartPhase = activePos === segmentLeft
+      ? (switchPoint - progress) / switchPoint
+      : (progress - switchPoint) / (1 - switchPoint);
+    var chartPhase = Math.sqrt(Math.max(0, Math.min(1, rawChartPhase)));
+    if (activeScene !== currentScene) {
+      var previousPos = flowSceneIndices.indexOf(currentScene);
+      var crossedInterlude = activeInterlude !== null;
+      var adjacentWithinAct = previousPos >= 0 && Math.abs(activePos - previousPos) === 1 &&
+        actForScene(activeScene) === actForScene(currentScene);
+      if (!crossedInterlude && adjacentWithinAct) {
+        captureFlowChartGhost(activePos > previousPos ? 1 : -1, activeScene, spacing);
+      } else {
+        removeFlowChartGhost();
+      }
+      showScene(activeScene);
+    }
+
+    var chartOpacity = 0.3 + 0.7 * chartPhase;
+    if (flowChartGhost) {
+      // Physical scroll distance stays monotonic across pair boundaries and handles reversals more
+      // reliably than a normalized segment value that resets at each scene centre.
+      var advance = flowGhostDirection > 0
+        ? (window.scrollY - flowGhostStartScroll) / flowGhostSpacing
+        : (flowGhostStartScroll - window.scrollY) / flowGhostSpacing;
+      // Scroll remains the primary driver. A 360ms clock fallback guarantees completion if a
+      // fast wheel/trackpad event lands beyond the threshold and then emits no further movement.
+      var elapsedAdvance = (performance.now() - flowGhostStartTime) / 360 * 0.18;
+      advance = Math.max(0, advance, elapsedAdvance);
+      var incomingBlend = flowSmoothstep(0, 0.18, advance);
+      var outgoingBlend = flowSmoothstep(0, 0.18, advance);
+      chartOpacity = flowIncomingStartOpacity +
+        (chartOpacity - flowIncomingStartOpacity) * incomingBlend;
+      flowChartGhost.style.opacity = String(flowGhostStartOpacity * (1 - outgoingBlend));
+      var detailOpacity = 1 - 0.96 * flowSmoothstep(0.02, 0.38, outgoingBlend);
+      var ghostOffset = (flowGhostDirection > 0 ? -1 : 1) * outgoingBlend * 8;
+      flowChartGhost.style.setProperty("--ghost-detail-opacity", detailOpacity.toFixed(3));
+      flowChartGhost.style.setProperty("--ghost-saturation", (1 - 0.50 * outgoingBlend).toFixed(3));
+      flowChartGhost.style.setProperty("--ghost-blur", (0.12 + 0.75 * outgoingBlend).toFixed(2) + "px");
+      flowChartGhost.style.transform = "translateY(calc(-50% + " + ghostOffset.toFixed(2) + "px))";
+      if (advance >= 0.18) removeFlowChartGhost();
+    }
+    chartCard.style.opacity = String(chartOpacity);
+    chartCard.style.transform = "translateY(" +
+      ((centers[activePos] - midpoint) / spacing * -5).toFixed(2) + "px)";
+
+    flowSteps.forEach(function (step, pos) {
+      var opacity = cardOpacities[pos];
+      var weight = (opacity - baseOpacity) / (1 - baseOpacity);
+      var card = step.querySelector(".card");
+      card.style.opacity = opacity.toFixed(3);
+      card.style.visibility = "visible";
+      card.style.transform = "scale(" + (0.985 + 0.015 * weight).toFixed(4) + ")";
+      card.style.filter = "blur(" + ((1 - weight) * 0.9).toFixed(2) + "px)";
+      card.style.boxShadow = pos === activePos
+        ? "0 14px 38px rgba(0,0,0,.13)" : "0 4px 16px rgba(0,0,0,.04)";
+    });
+    if (flowChartGhost && flowFrame === null) flowFrame = requestAnimationFrame(updateNeighborFlow);
+  }
+  function requestNeighborFlowUpdate() {
+    if (flowFrame === null) flowFrame = requestAnimationFrame(updateNeighborFlow);
+  }
+  window.addEventListener("scroll", requestNeighborFlowUpdate, { passive: true });
+  window.addEventListener("resize", requestNeighborFlowUpdate);
+  showScene(0);
+  requestNeighborFlowUpdate();
+} else {
+  showScene(0);
+}
 
 document.querySelectorAll(".step .card").forEach(function (card) {
   var more = card.querySelector(".more");
